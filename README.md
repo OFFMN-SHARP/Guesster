@@ -29,26 +29,6 @@ Guesster 反其道而行之：**只给 AI 一个工具 `il_run`**。
 - **📦 零依赖单文件**：30KB 核心，即下即用
 
 
-#### 工作流程图
-
-```markdown
-## 🔄 工作流程
-
-```
-你: "列出桌面文件"
-         ↓
-  Guesster 调用 AI
-         ↓
-  AI 决定调用 il_run
-         ↓
-  生成 C# 代码: Directory.GetFiles(@"C:\Users\...\Desktop")
-         ↓
-  你确认 → 执行 → 返回结果
-         ↓
-  AI 总结: "桌面上有 3 个文件..."
-```
-```
-
 #### 使用场景
 
 ```markdown
