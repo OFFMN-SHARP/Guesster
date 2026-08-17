@@ -7,6 +7,8 @@ using System.Text;
 using System.Windows.Forms;
 using System.Text.RegularExpressions;
 
+int UiWait = 600;
+int Wait = 300;
 string GetApiKey()
 {
     Console.Write("请输入API Key（或按回车使用环境变量）: ");
@@ -79,12 +81,22 @@ var options = new ChatOptions
 {
     Tools = [ilRunTool] // 把工具塞给 AI
 };
+
 async Task<string> ExecuteCode(string code)
 {
-    using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+    // 1. 检测是否为阻塞 UI 的代码
+    bool hasInteractiveUI = code.Contains("ShowDialog") ||
+                            code.Contains("Show") ||  // 针对 WinForms 和 WPF
+                            code.Contains("Application.Run") ||
+                            code.Contains("MessageBox.Show");
+
+    // 2. 设定超时时间：UI 交互给 10 分钟，普通代码给 5 秒
+    TimeSpan timeout = hasInteractiveUI ? TimeSpan.FromSeconds(UiWait) : TimeSpan.FromSeconds(Wait);
+
+    using var cts = new CancellationTokenSource(timeout);
     try
     {
-        var options = ScriptOptions.Default
+        var scriptOptions = ScriptOptions.Default
             .WithImports("System", "System.IO", "System.Collections.Generic", "System.Linq", "System.Text", "System.Windows.Forms")
             .WithReferences(
                 typeof(object).Assembly,
@@ -93,19 +105,25 @@ async Task<string> ExecuteCode(string code)
                 typeof(StringBuilder).Assembly,
                 typeof(Form).Assembly
             );
-        var result = await CSharpScript.RunAsync(code, options, cancellationToken: cts.Token);
+
+        var result = await CSharpScript.RunAsync(code, scriptOptions, cancellationToken: cts.Token);
         return result.ReturnValue?.ToString() ?? "执行成功（无输出）";
     }
     catch (CompilationErrorException ex)
     {
         return $"编译错误:\n{string.Join("\n", ex.Diagnostics)}";
     }
-    catch (OperationCanceledException) {
-        return "执行超时（超过5秒），已终止。";
-    }catch (Exception ex)
+    catch (OperationCanceledException)
+    {
+        // 根据类型返回友好提示
+        return hasInteractiveUI
+            ? "UI 操作超时（超过10分钟），已终止。"
+            : "执行超时（超过5秒），已终止。";
+    }
+    catch (Exception ex)
     {
         return $"运行时错误: {ex.Message}";
-    } 
+    }
 }
 bool Ask()
 {
@@ -132,7 +150,17 @@ while (true)
         Console.WriteLine("上下文已清空。");
         continue;
     }
-
+    if (input.StartsWith("/timeout"))
+    {
+        var parts = input.Split(' ');
+        if (parts.Length > 1 && int.TryParse(parts[1], out int seconds))
+        {
+            Wait=seconds;
+            UiWait = seconds * 4;
+            Console.WriteLine($"⏱️ 超时时间已设置为 {seconds} 秒");
+        }
+        continue;
+    }
     // 添加用户消息
     messages.Add(new Microsoft.Extensions.AI.ChatMessage(Microsoft.Extensions.AI.ChatRole.User, input));
 
